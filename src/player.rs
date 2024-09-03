@@ -1,3 +1,4 @@
+use valence::entity::entity::Flags;
 use valence::{entity::zombie::ZombieEntityBundle, prelude::*};
 
 #[derive(Component, PartialEq)]
@@ -32,14 +33,29 @@ pub struct CharacterId(u32); // same as player entity index
 
 pub fn spawn_player_character(
     mut commands: Commands,
-    players: Query<(Entity, &PlayerCharacter, &PlayerState, &Position), Changed<PlayerCharacter>>,
+    mut players: Query<
+        (
+            Entity,
+            &PlayerCharacter,
+            &PlayerState,
+            &Position,
+            &mut Flags,
+        ),
+        Changed<PlayerCharacter>,
+    >,
     layers: Query<Entity, (With<ChunkLayer>, With<EntityLayer>)>,
 ) {
     let layer = layers.single();
 
-    for (player_entity, player_character, player_state, position) in players.iter() {
-        if (*player_state == PlayerState::Playing || *player_state == PlayerState::Spawn) {
+    for (player_entity, player_character, player_state, position, mut player_flags) in
+        players.iter_mut()
+    {
+        if *player_state == PlayerState::Playing || *player_state == PlayerState::Spawn {
+            player_flags.set_invisible(true);
             match player_character {
+                PlayerCharacter::None => {
+                    player_flags.set_invisible(false);
+                }
                 PlayerCharacter::Zombie => {
                     commands
                         .spawn(ZombieEntityBundle {
