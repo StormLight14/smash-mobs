@@ -1,5 +1,7 @@
 use combat::*;
-use player::{KnockbackScale, PlayerCharacter, PlayerState};
+use player::{
+    character_follows_player, spawn_player_character, KnockbackScale, PlayerCharacter, PlayerState,
+};
 use portals::{CharacterPortal, CharacterPortalBundle};
 use rand::Rng;
 use valence::entity::block_display::BlockDisplayEntityBundle;
@@ -28,7 +30,14 @@ fn main() {
         .add_systems(EventLoopUpdate, handle_combat_events)
         .add_systems(
             Update,
-            (init_clients, client_disconnect, teleport_oob_clients),
+            (
+                init_clients,
+                client_disconnect,
+                teleport_oob_clients,
+                portals::check_for_players,
+                spawn_player_character,
+                character_follows_player,
+            ),
         )
         .insert_resource::<Globals>(Globals::default())
         .run();
@@ -93,7 +102,7 @@ fn create_portals(
         character_portal: CharacterPortal,
         text_display_entity_bundle: TextDisplayEntityBundle {
             text_display_text: TextDisplayText("Zombie".into_text().color(Color::RED)),
-            position: Position::new([-5.0, 66.0, -5.0]),
+            position: Position::new([-5.0, 65.0, -5.0]),
             layer: EntityLayerId(layer),
             ..Default::default()
         },
@@ -138,6 +147,7 @@ fn init_clients(
         commands
             .entity(client_entity)
             .insert(PlayerState::Spawn)
+            .insert(PlayerCharacter::None)
             .insert(CombatState::default())
             .insert(KnockbackScale::default());
         globals.online_players += 1;

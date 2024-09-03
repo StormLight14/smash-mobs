@@ -1,10 +1,13 @@
 use crate::player::KnockbackScale;
 use bevy_ecs::query::QueryData;
+use rand::Rng;
 use valence::entity::EntityStatuses;
 use valence::math::Vec3Swizzles;
 use valence::prelude::*;
+use valence::protocol::packets::play::ExperienceBarUpdateS2c;
 use valence::protocol::sound::SoundCategory;
-use valence::protocol::Sound;
+use valence::protocol::WritePacket;
+use valence::protocol::{Sound, VarInt};
 
 pub const SPAWN_Y: i32 = 64;
 pub const ARENA_RADIUS: i32 = 32;
@@ -64,11 +67,16 @@ pub fn handle_combat_events(
 
         let dir = (victim_pos - attacker_pos).normalize().as_vec2();
 
+        let mut rng = rand::thread_rng();
+
         let knockback_xz = if attacker.state.has_bonus_knockback {
-            18.0
+            victim.knockback_scale.0 += rng.gen_range(0.3..=0.4);
+            12.0
         } else {
+            victim.knockback_scale.0 += rng.gen_range(0.2..=0.3);
             8.0
         };
+
         let knockback_y = if attacker.state.has_bonus_knockback {
             8.432
         } else {
@@ -81,6 +89,12 @@ pub fn handle_combat_events(
             dir.y * knockback_xz * victim.knockback_scale.0,
         ]);
 
+        victim.client.write_packet(&ExperienceBarUpdateS2c {
+            bar: 1.0,
+            level: VarInt(((victim.knockback_scale.0 * 50.0) as i32) - 50),
+            total_xp: VarInt(0),
+        });
+
         victim.client.play_sound(
             Sound::EntityPlayerHurt,
             SoundCategory::Player,
@@ -88,8 +102,6 @@ pub fn handle_combat_events(
             1.0,
             1.0,
         );
-
-        victim.knockback_scale.0 += 0.2;
 
         attacker.client.play_sound(
             Sound::EntityPlayerHurt,
@@ -100,17 +112,33 @@ pub fn handle_combat_events(
         );
 
         attacker.state.has_bonus_knockback = false;
-
         victim.client.trigger_status(EntityStatus::PlayAttackSound);
 
         victim.statuses.trigger(EntityStatus::PlayAttackSound);
     }
 }
 
-pub fn teleport_oob_clients(mut clients: Query<&mut Position, With<Client>>) {
-    for mut pos in &mut clients {
+pub fn teleport_oob_clients(
+    mut clients: Query<(&mut Client, &mut KnockbackScale, &mut Position), With<Client>>,
+) {
+    for (mut client, mut knockback_scale, mut pos) in &mut clients {
         if pos.0.y < 0.0 {
+            client.play_sound(
+                Sound::EntityPlayerLevelup,
+                SoundCategory::Player,
+                pos.0,
+                1.0,
+                1.0,
+            );
+            knockback_scale.0 = 1.0;
             pos.set([0.0, f64::from(SPAWN_Y), 0.0]);
+            /*
+            client.write_packet(&ExperienceBarUpdateS2c {
+                bar: 0.0,
+                level: VarInt(0),
+                total_xp: VarInt(0),
+            });
+            */
         }
     }
 }
